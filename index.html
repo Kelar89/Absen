@@ -1,0 +1,307 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Absensi Kerja Profesional</title>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+
+<style>
+body{
+font-family:Arial;
+background:#eef2f7;
+padding:20px;
+max-width:1100px;
+margin:auto;
+}
+.container{
+background:white;
+padding:20px;
+border-radius:15px;
+box-shadow:0 0 15px rgba(0,0,0,0.1);
+}
+h2{
+text-align:center;
+color:#007bff;
+}
+.grid{
+display:grid;
+grid-template-columns:1fr 1fr;
+gap:20px;
+}
+input, textarea, button{
+width:100%;
+padding:10px;
+margin:5px 0;
+border-radius:8px;
+border:1px solid #ccc;
+}
+button{
+background:#007bff;
+color:white;
+border:none;
+cursor:pointer;
+}
+table{
+width:100%;
+border-collapse:collapse;
+margin-top:20px;
+}
+th,td{
+border:1px solid #ddd;
+padding:10px;
+text-align:center;
+}
+th{
+background:#007bff;
+color:white;
+}
+.telat{
+background:#ffcccc;
+}
+.tepat{
+background:#ccffcc;
+}
+.card{
+background:#f8f9fa;
+padding:15px;
+border-radius:10px;
+}
+canvas{
+margin-top:20px;
+}
+.calendar{
+margin-top:20px;
+display:grid;
+grid-template-columns:repeat(7,1fr);
+gap:5px;
+}
+.day{
+padding:10px;
+background:#f0f0f0;
+text-align:center;
+border-radius:5px;
+}
+.red{
+background:#ff9999;
+}
+.green{
+background:#99ff99;
+}
+</style>
+</head>
+<body>
+
+<div class="container">
+
+<h2>Absensi Kerja Profesional</h2>
+
+<div class="grid">
+
+<div class="card">
+<label>Tanggal</label>
+<input type="date" id="tanggal">
+
+<label>Jam Masuk</label>
+<input type="time" id="jamMasuk">
+
+<label>Jam Pulang</label>
+<input type="time" id="jamPulang">
+
+<label>Alasan Telat</label>
+<textarea id="alasan"></textarea>
+
+<button onclick="simpanData()">Simpan Data</button>
+<button onclick="exportExcel()">Export Excel</button>
+<button onclick="exportPDF()">Export PDF</button>
+</div>
+
+<div class="card">
+<h3>Rekap Bulanan</h3>
+<div id="rekap"></div>
+<canvas id="chart"></canvas>
+</div>
+
+</div>
+
+<table>
+<thead>
+<tr>
+<th>Tanggal</th>
+<th>Masuk</th>
+<th>Pulang</th>
+<th>Telat</th>
+<th>Pulang Cepat</th>
+<th>Potongan</th>
+<th>Alasan</th>
+</tr>
+</thead>
+<tbody id="tableData"></tbody>
+</table>
+
+<h3>Kalender Kerja</h3>
+<div class="calendar" id="calendar"></div>
+
+</div>
+
+<script>
+let data = JSON.parse(localStorage.getItem("absensi")) || [];
+
+function hitungPotongan(jamMasuk,jamPulang){
+
+let targetMasuk = 9*60;
+let targetPulang = 17*60;
+
+let [jm,mm] = jamMasuk.split(":").map(Number);
+let [jp,mp] = jamPulang.split(":").map(Number);
+
+let masuk = jm*60+mm;
+let pulang = jp*60+mp;
+
+let telat = masuk-targetMasuk;
+let cepat = targetPulang-pulang;
+
+let potongan = 0;
+
+if(telat>5 && telat<=10) potongan=10000;
+else if(telat>10 && telat<=20) potongan=50000;
+else if(telat>20) potongan=100000;
+
+if(cepat>5 && cepat<=10) potongan+=10000;
+else if(cepat>10 && cepat<=20) potongan+=50000;
+else if(cepat>20) potongan+=100000;
+
+return {telat,cepat,potongan};
+}
+
+function simpanData(){
+
+let tanggal=document.getElementById("tanggal").value;
+let jamMasuk=document.getElementById("jamMasuk").value;
+let jamPulang=document.getElementById("jamPulang").value;
+let alasan=document.getElementById("alasan").value;
+
+let hasil=hitungPotongan(jamMasuk,jamPulang);
+
+data.push({
+tanggal,jamMasuk,jamPulang,
+telat:hasil.telat,
+cepat:hasil.cepat,
+potongan:hasil.potongan,
+alasan
+});
+
+localStorage.setItem("absensi",JSON.stringify(data));
+
+render();
+}
+
+function render(){
+
+let tbody=document.getElementById("tableData");
+tbody.innerHTML="";
+
+let total=0;
+let telatCount=0;
+
+data.forEach(d=>{
+
+if(d.telat>0) telatCount++;
+total+=d.potongan;
+
+tbody.innerHTML+=`
+<tr class="${d.telat>0?'telat':'tepat'}">
+<td>${d.tanggal}</td>
+<td>${d.jamMasuk}</td>
+<td>${d.jamPulang}</td>
+<td>${d.telat>0?d.telat+' menit':'Tepat'}</td>
+<td>${d.cepat>0?d.cepat+' menit':'Normal'}</td>
+<td>Rp${d.potongan.toLocaleString()}</td>
+<td>${d.alasan}</td>
+</tr>
+`;
+
+});
+
+document.getElementById("rekap").innerHTML=
+`
+Total Hari: ${data.length}<br>
+Total Telat: ${telatCount}<br>
+Total Potongan: Rp${total.toLocaleString()}
+`;
+
+renderChart();
+renderCalendar();
+}
+
+function renderChart(){
+
+let ctx=document.getElementById("chart");
+
+new Chart(ctx,{
+type:'bar',
+data:{
+labels:data.map(d=>d.tanggal),
+datasets:[{
+label:'Potongan',
+data:data.map(d=>d.potongan)
+}]
+}
+});
+
+}
+
+function renderCalendar(){
+
+let cal=document.getElementById("calendar");
+cal.innerHTML="";
+
+data.forEach(d=>{
+cal.innerHTML+=`
+<div class="day ${d.telat>0?'red':'green'}">${d.tanggal.split("-")[2]}</div>
+`;
+});
+}
+
+function exportExcel(){
+
+let csv="Tanggal,Masuk,Pulang,Telat,Pulang Cepat,Potongan,Alasan\n";
+
+data.forEach(d=>{
+csv+=`${d.tanggal},${d.jamMasuk},${d.jamPulang},${d.telat},${d.cepat},${d.potongan},${d.alasan}\n`;
+});
+
+let blob=new Blob([csv],{type:'text/csv'});
+let a=document.createElement('a');
+a.href=URL.createObjectURL(blob);
+a.download='absensi.csv';
+a.click();
+
+}
+
+function exportPDF(){
+
+const { jsPDF } = window.jspdf;
+const doc = new jsPDF();
+
+let y=10;
+
+doc.text("Data Absensi",10,y);
+
+data.forEach(d=>{
+y+=10;
+doc.text(`${d.tanggal} | ${d.jamMasuk} | ${d.jamPulang} | Rp${d.potongan}`,10,y);
+});
+
+doc.save("absensi.pdf");
+
+}
+
+render();
+
+</script>
+
+</body>
+</html>
