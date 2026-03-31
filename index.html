@@ -13,7 +13,7 @@ body{
 font-family:Arial;
 background:#eef2f7;
 padding:20px;
-max-width:1100px;
+max-width:1200px;
 margin:auto;
 }
 .container{
@@ -31,12 +31,18 @@ display:grid;
 grid-template-columns:1fr 1fr;
 gap:20px;
 }
+.card{
+background:#f9f9f9;
+padding:15px;
+border-radius:10px;
+}
 input, textarea, button{
 width:100%;
 padding:10px;
 margin:5px 0;
 border-radius:8px;
 border:1px solid #ccc;
+box-sizing:border-box;
 }
 button{
 background:#007bff;
@@ -46,12 +52,12 @@ cursor:pointer;
 }
 table{
 width:100%;
-border-collapse:collapse;
 margin-top:20px;
+border-collapse:collapse;
 }
 th,td{
-border:1px solid #ddd;
 padding:10px;
+border:1px solid #ddd;
 text-align:center;
 }
 th{
@@ -59,28 +65,19 @@ background:#007bff;
 color:white;
 }
 .telat{
-background:#ffcccc;
+background:#ffd6d6;
 }
 .tepat{
-background:#ccffcc;
-}
-.card{
-background:#f8f9fa;
-padding:15px;
-border-radius:10px;
-}
-canvas{
-margin-top:20px;
+background:#d6ffd6;
 }
 .calendar{
-margin-top:20px;
 display:grid;
 grid-template-columns:repeat(7,1fr);
 gap:5px;
+margin-top:20px;
 }
 .day{
 padding:10px;
-background:#f0f0f0;
 text-align:center;
 border-radius:5px;
 }
@@ -89,6 +86,9 @@ background:#ff9999;
 }
 .green{
 background:#99ff99;
+}
+canvas{
+max-height:300px;
 }
 </style>
 </head>
@@ -101,13 +101,14 @@ background:#99ff99;
 <div class="grid">
 
 <div class="card">
+
 <label>Tanggal</label>
 <input type="date" id="tanggal">
 
-<label>Jam Masuk</label>
+<label>Jam Masuk (24 jam)</label>
 <input type="time" id="jamMasuk">
 
-<label>Jam Pulang</label>
+<label>Jam Pulang (24 jam)</label>
 <input type="time" id="jamPulang">
 
 <label>Alasan Telat</label>
@@ -116,12 +117,15 @@ background:#99ff99;
 <button onclick="simpanData()">Simpan Data</button>
 <button onclick="exportExcel()">Export Excel</button>
 <button onclick="exportPDF()">Export PDF</button>
+
 </div>
 
 <div class="card">
+
 <h3>Rekap Bulanan</h3>
 <div id="rekap"></div>
 <canvas id="chart"></canvas>
+
 </div>
 
 </div>
@@ -147,33 +151,37 @@ background:#99ff99;
 </div>
 
 <script>
+
 let data = JSON.parse(localStorage.getItem("absensi")) || [];
+let chart;
+
+function toMinutes(time){
+let [h,m]=time.split(":").map(Number);
+return h*60+m;
+}
 
 function hitungPotongan(jamMasuk,jamPulang){
 
-let targetMasuk = 9*60;
-let targetPulang = 17*60;
+let targetMasuk = 540;
+let targetPulang = 1020;
 
-let [jm,mm] = jamMasuk.split(":").map(Number);
-let [jp,mp] = jamPulang.split(":").map(Number);
+let masuk = toMinutes(jamMasuk);
+let pulang = toMinutes(jamPulang);
 
-let masuk = jm*60+mm;
-let pulang = jp*60+mp;
-
-let telat = masuk-targetMasuk;
-let cepat = targetPulang-pulang;
+let telat = Math.max(0, masuk-targetMasuk);
+let cepat = Math.max(0, targetPulang-pulang);
 
 let potongan = 0;
 
-if(telat>5 && telat<=10) potongan=10000;
-else if(telat>10 && telat<=20) potongan=50000;
-else if(telat>20) potongan=100000;
+if(telat>5 && telat<=10) potongan+=10000;
+else if(telat>10 && telat<=20) potongan+=50000;
+else if(telat>20) potongan+=100000;
 
 if(cepat>5 && cepat<=10) potongan+=10000;
 else if(cepat>10 && cepat<=20) potongan+=50000;
 else if(cepat>20) potongan+=100000;
 
-return {telat,cepat,potongan};
+return {telat, cepat, potongan};
 }
 
 function simpanData(){
@@ -193,9 +201,10 @@ potongan:hasil.potongan,
 alasan
 });
 
-localStorage.setItem("absensi",JSON.stringify(data));
+localStorage.setItem("absensi", JSON.stringify(data));
 
 render();
+
 }
 
 function render(){
@@ -211,7 +220,7 @@ data.forEach(d=>{
 if(d.telat>0) telatCount++;
 total+=d.potongan;
 
-tbody.innerHTML+=`
+tbody.innerHTML += `
 <tr class="${d.telat>0?'telat':'tepat'}">
 <td>${d.tanggal}</td>
 <td>${d.jamMasuk}</td>
@@ -238,9 +247,13 @@ renderCalendar();
 
 function renderChart(){
 
+if(chart){
+chart.destroy();
+}
+
 let ctx=document.getElementById("chart");
 
-new Chart(ctx,{
+chart = new Chart(ctx,{
 type:'bar',
 data:{
 labels:data.map(d=>d.tanggal),
@@ -259,10 +272,11 @@ let cal=document.getElementById("calendar");
 cal.innerHTML="";
 
 data.forEach(d=>{
-cal.innerHTML+=`
+cal.innerHTML += `
 <div class="day ${d.telat>0?'red':'green'}">${d.tanggal.split("-")[2]}</div>
 `;
 });
+
 }
 
 function exportExcel(){
@@ -270,10 +284,10 @@ function exportExcel(){
 let csv="Tanggal,Masuk,Pulang,Telat,Pulang Cepat,Potongan,Alasan\n";
 
 data.forEach(d=>{
-csv+=`${d.tanggal},${d.jamMasuk},${d.jamPulang},${d.telat},${d.cepat},${d.potongan},${d.alasan}\n`;
+csv += `${d.tanggal},${d.jamMasuk},${d.jamPulang},${d.telat},${d.cepat},${d.potongan},${d.alasan}\n`;
 });
 
-let blob=new Blob([csv],{type:'text/csv'});
+let blob = new Blob([csv], {type:'text/csv'});
 let a=document.createElement('a');
 a.href=URL.createObjectURL(blob);
 a.download='absensi.csv';
@@ -288,7 +302,7 @@ const doc = new jsPDF();
 
 let y=10;
 
-doc.text("Data Absensi",10,y);
+doc.text("Laporan Absensi",10,y);
 
 data.forEach(d=>{
 y+=10;
