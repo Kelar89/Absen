@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Absensi Kerja Profesional</title>
+<title>Absensi Profesional Stabil</title>
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -22,17 +22,13 @@ padding:20px;
 border-radius:15px;
 box-shadow:0 0 15px rgba(0,0,0,0.1);
 }
-h2{
-text-align:center;
-color:#007bff;
-}
 .grid{
 display:grid;
 grid-template-columns:1fr 1fr;
 gap:20px;
 }
 .card{
-background:#f9f9f9;
+background:#f8f9fa;
 padding:15px;
 border-radius:10px;
 }
@@ -87,16 +83,13 @@ background:#ff9999;
 .green{
 background:#99ff99;
 }
-canvas{
-max-height:300px;
-}
 </style>
 </head>
 <body>
 
 <div class="container">
 
-<h2>Absensi Kerja Profesional</h2>
+<h2 style="text-align:center;color:#007bff;">Absensi Kerja Profesional</h2>
 
 <div class="grid">
 
@@ -105,16 +98,17 @@ max-height:300px;
 <label>Tanggal</label>
 <input type="date" id="tanggal">
 
-<label>Jam Masuk (24 jam)</label>
-<input type="time" id="jamMasuk">
+<label>Jam Masuk (contoh 09:15)</label>
+<input type="text" id="jamMasuk" placeholder="09:15">
 
-<label>Jam Pulang (24 jam)</label>
-<input type="time" id="jamPulang">
+<label>Jam Pulang (contoh 17:00)</label>
+<input type="text" id="jamPulang" placeholder="17:00">
 
 <label>Alasan Telat</label>
 <textarea id="alasan"></textarea>
 
 <button onclick="simpanData()">Simpan Data</button>
+<button onclick="hapusSemua()">Reset Data</button>
 <button onclick="exportExcel()">Export Excel</button>
 <button onclick="exportPDF()">Export PDF</button>
 
@@ -155,9 +149,24 @@ max-height:300px;
 let data = JSON.parse(localStorage.getItem("absensi")) || [];
 let chart;
 
-function toMinutes(time){
-let [h,m]=time.split(":").map(Number);
+function parseTime(time){
+
+time = time.trim().toUpperCase();
+
+if(time.includes("AM") || time.includes("PM")){
+let parts = time.replace("AM","").replace("PM","").trim().split(":");
+let h = parseInt(parts[0]);
+let m = parseInt(parts[1]);
+
+if(time.includes("PM") && h<12) h+=12;
+if(time.includes("AM") && h===12) h=0;
+
 return h*60+m;
+}
+
+let parts = time.split(":");
+
+return parseInt(parts[0])*60 + parseInt(parts[1]);
 }
 
 function hitungPotongan(jamMasuk,jamPulang){
@@ -165,8 +174,8 @@ function hitungPotongan(jamMasuk,jamPulang){
 let targetMasuk = 540;
 let targetPulang = 1020;
 
-let masuk = toMinutes(jamMasuk);
-let pulang = toMinutes(jamPulang);
+let masuk = parseTime(jamMasuk);
+let pulang = parseTime(jamPulang);
 
 let telat = Math.max(0, masuk-targetMasuk);
 let cepat = Math.max(0, targetPulang-pulang);
@@ -204,7 +213,6 @@ alasan
 localStorage.setItem("absensi", JSON.stringify(data));
 
 render();
-
 }
 
 function render(){
@@ -220,7 +228,7 @@ data.forEach(d=>{
 if(d.telat>0) telatCount++;
 total+=d.potongan;
 
-tbody.innerHTML += `
+tbody.innerHTML+=`
 <tr class="${d.telat>0?'telat':'tepat'}">
 <td>${d.tanggal}</td>
 <td>${d.jamMasuk}</td>
@@ -247,13 +255,9 @@ renderCalendar();
 
 function renderChart(){
 
-if(chart){
-chart.destroy();
-}
+if(chart) chart.destroy();
 
-let ctx=document.getElementById("chart");
-
-chart = new Chart(ctx,{
+chart = new Chart(document.getElementById("chart"),{
 type:'bar',
 data:{
 labels:data.map(d=>d.tanggal),
@@ -263,7 +267,6 @@ data:data.map(d=>d.potongan)
 }]
 }
 });
-
 }
 
 function renderCalendar(){
@@ -272,10 +275,17 @@ let cal=document.getElementById("calendar");
 cal.innerHTML="";
 
 data.forEach(d=>{
-cal.innerHTML += `
+cal.innerHTML+=`
 <div class="day ${d.telat>0?'red':'green'}">${d.tanggal.split("-")[2]}</div>
 `;
 });
+}
+
+function hapusSemua(){
+
+localStorage.removeItem("absensi");
+data=[];
+render();
 
 }
 
@@ -284,15 +294,14 @@ function exportExcel(){
 let csv="Tanggal,Masuk,Pulang,Telat,Pulang Cepat,Potongan,Alasan\n";
 
 data.forEach(d=>{
-csv += `${d.tanggal},${d.jamMasuk},${d.jamPulang},${d.telat},${d.cepat},${d.potongan},${d.alasan}\n`;
+csv+=`${d.tanggal},${d.jamMasuk},${d.jamPulang},${d.telat},${d.cepat},${d.potongan},${d.alasan}\n`;
 });
 
-let blob = new Blob([csv], {type:'text/csv'});
+let blob=new Blob([csv],{type:'text/csv'});
 let a=document.createElement('a');
 a.href=URL.createObjectURL(blob);
 a.download='absensi.csv';
 a.click();
-
 }
 
 function exportPDF(){
@@ -310,12 +319,10 @@ doc.text(`${d.tanggal} | ${d.jamMasuk} | ${d.jamPulang} | Rp${d.potongan}`,10,y)
 });
 
 doc.save("absensi.pdf");
-
 }
 
 render();
 
 </script>
-
 </body>
 </html>
